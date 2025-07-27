@@ -338,11 +338,15 @@ inline auto multiplotcmd(std::ostream& out, std::size_t rows, std::size_t column
 /// Auxiliary function to run gnuplot to show or save a script file
 // persistent == true: for show commands. show the file using GNUplot until the window is closed
 // persistent == false: for save commands. close gnuplot immediately
-inline auto runscript(std::string scriptfilename, bool persistent) -> bool
+inline auto runscript(std::string scriptfilename, bool persistent)
 {
     std::string command = persistent ? "gnuplot -persistent " : "gnuplot ";
     command += "\"" + scriptfilename + "\"";
-    return std::system(command.c_str()) == 0;
+    if (auto retval{std::system(command.c_str())};
+        !retval)
+    {
+        throw std::system_error(retval, std::generic_category(), "gnuplot reported an internal error");
+    }
 }
 
 /// Auxiliary function to escape a output path so it can be used for GNUplot.
