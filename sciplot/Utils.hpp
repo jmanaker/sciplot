@@ -41,6 +41,8 @@
 #include <sciplot/Enums.hpp>
 #include <sciplot/Palettes.hpp>
 
+#include <Windows.h>
+
 namespace sciplot
 {
 namespace internal
@@ -340,13 +342,56 @@ inline auto multiplotcmd(std::ostream& out, std::size_t rows, std::size_t column
 // persistent == false: for save commands. close gnuplot immediately
 inline auto runscript(std::string scriptfilename, bool persistent)
 {
-    std::string command = persistent ? "gnuplot -persistent " : "gnuplot ";
+    std::string command = persistent ? "-persistent " : std::string{};
     command += "\"" + scriptfilename + "\"";
-    if (auto retval{std::system(command.c_str())};
-        !retval)
+    struct safe_PI : public PROCESS_INFORMATION
     {
-        throw std::system_error(retval, std::generic_category(), "gnuplot reported an internal error");
+        safe_PI() noexcept : PROCESS_INFORMATION{} {};
+        ~safe_PI()
+        {
+            CloseHandle(hProcess);
+            CloseHandle(hThread);
+        }
+    } gnuplotState;
+    {
+        STARTUPINFOA settings{
+            sizeof(settings),
+            nullptr, // lpReserved
+            nullptr, // Does a default desktop exist?  We'll find out!
+            nullptr, // Let it set its own title
+            0, 0, 0, 0, 0, 0, 0, // No sizing/positioning
+            STARTF_USESTDHANDLES, // Will specify stdin/out/err (below)
+            0, // don't care about min/max/fullscreen
+            0, nullptr, // Reserved
+            GetStdHandle(STD_INPUT_HANDLE), // Use the current input handle
+            GetStdHandle(STD_OUTPUT_HANDLE), // Use the current output handle
+            GetStdHandle(STD_ERROR_HANDLE) // Use the current error handle
+        };
+        if (CreateProcessA("gnuplot",
+                           /*Modifiable b/c gnuplot could try to write back into it*/ command.data(),
+                           /*No handle inheritance*/ nullptr, nullptr, false,
+                           /*Default-ish behavior; no flags*/ 0,
+                           /*Shared environment and CD*/ nullptr, nullptr,
+                           &settings, &gnuplotState))
+            throw std::system_error(GetLastError(), std::system_category(), 
+                "Failed to start gnuplot");
     }
+    switch (WaitForSingleObject(gnuplotState.hProcess, INFINITE))
+    {
+        case WAIT_OBJECT_0: break; // Process finished
+        case WAIT_FAILED:
+            throw std::system_error(GetLastError(), std::system_category(), 
+                "gnuplot process completion unobservable");
+        default: std::terminate(); //Should never happen
+    }
+    if (DWORD exitCode; GetExitCodeProcess(gnuplotState.hProcess, &exitCode))
+    {
+        if (exitCode)
+            throw std::system_error(exitCode, std::system_category(), 
+                "gnuplot reported an internal error");
+    }
+    else throw std::system_error(GetLastError(), std::system_category(), 
+        "Failed to get gnuplot exit code");
 }
 
 /// Auxiliary function to escape a output path so it can be used for GNUplot.
