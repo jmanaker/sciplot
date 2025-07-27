@@ -1,8 +1,9 @@
 # Prerequisites
 *.d
 
-# Visual Studio Code directory
+# Visual Studio & VS Code directories
 .vscode/
+.vs/
 
 # Build directories
 build/
