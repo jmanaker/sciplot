@@ -346,7 +346,7 @@ inline auto runscript(std::string scriptfilename, bool persistent)
     command += "\"" + scriptfilename + "\"";
     struct safe_PI : public PROCESS_INFORMATION
     {
-        safe_PI() noexcept : PROCESS_INFORMATION{} {};
+        safe_PI() noexcept : PROCESS_INFORMATION{0,0,0,0} {};
         ~safe_PI()
         {
             CloseHandle(hProcess);
@@ -354,6 +354,7 @@ inline auto runscript(std::string scriptfilename, bool persistent)
         }
     } gnuplotState;
     {
+        // A, b/c `command` is just char, not wchar_t
         STARTUPINFOA settings{
             sizeof(settings),
             nullptr, // lpReserved
